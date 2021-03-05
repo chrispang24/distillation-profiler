@@ -1,4 +1,7 @@
 import pandas as pd
+import numpy as np
+import math
+from scipy.interpolate import pchip
 
 class BlendedProfileBuilder():
 
@@ -54,12 +57,32 @@ class BlendedProfileBuilder():
 
         return profile_df
 
+    def get_interpolation_fit(self, df, range):
+        '''
+        Get interpolation over specified range using monotonic cubic splines to find the value of new points
+        https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.PchipInterpolator.html
+
+        Using same fit function used by Crude Monitor on distillation profile - interpolation calculator.
+
+        Setting temperature as 'x' variable, will get interpolated values for 'Recovery %' over the range.
+        '''
+        x = np.array(df['Temperature'])
+        y = np.array(df['Recovery'])
+
+        interpolation_fit = pchip(x,y)
+        return interpolation_fit(range)
+
     def run(self):
         print("Running Blended Distillation Profile Builder...")
         # self.extract_profiles_from_web()
 
         profile_df = self.load_processed_profile('AHS')
-        print(profile_df)
+
+        interpolation_range = np.arange(math.ceil(profile_df['Temperature'].min()), math.floor(profile_df['Temperature'].max()), 1)
+        interpolation = self.get_interpolation_fit(profile_df, interpolation_range)
+        print(interpolation)
+
+
 
 
 
