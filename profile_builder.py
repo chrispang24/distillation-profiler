@@ -42,48 +42,77 @@ class BlendedProfileBuilder():
         # isolate relevant columns and rename
         profile_df = profile_df[['Mass % Recovered', 'Temperature( oC )', 'Code']]
         profile_df = profile_df[profile_df['Code'] == code].reset_index(drop=True)
-        profile_df.columns = ['Recovery', 'Temperature', 'Code']
+        profile_df.columns = ['recovery', 'temperature', 'code']
 
         # set initial boiling point (IBP) to 0
-        profile_df['Recovery'][profile_df['Recovery'] == 'IBP'] = 0
+        profile_df['recovery'][profile_df['recovery'] == 'IBP'] = 0
 
         # remove blank recovery point temperature values
-        blank_temps = profile_df[profile_df['Temperature'] == '-'].index
+        blank_temps = profile_df[profile_df['temperature'] == '-'].index
         profile_df.drop(blank_temps, inplace=True)
 
         # set data types after cleaning
-        profile_df = profile_df.astype({'Recovery': 'int'})
-        profile_df = profile_df.astype({'Temperature': 'float64'})
+        profile_df = profile_df.astype({'recovery': 'int'})
+        profile_df = profile_df.astype({'temperature': 'float64'})
 
         return profile_df
 
-    def get_interpolation_fit(self, df, range):
+    def get_discrete_temperature_range(self, df):
         '''
-        Get interpolation over specified range using monotonic cubic splines to find the value of new points
+        Compute temperature range based on min/max of profile
+        '''
+        return np.arange(math.ceil(df['temperature'].min()), math.floor(df['temperature'].max()), 1)
+
+    def get_global_temperature_range(self, df1, df2):
+        '''
+        Compute global temperature range based on min/max of profile pair
+        '''
+        min_val = min(df1['temperature'].min(), df2['temperature'].min())
+        max_val = max(df1['temperature'].max(), df2['temperature'].max())
+        return np.arange(math.ceil(min_val), math.floor(max_val), 1)
+
+    def get_recovery_interpolation(self, df):
+        '''
+        Get interpolation over profile range using monotonic cubic splines to find the value of new points
         https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.PchipInterpolator.html
 
         Using same fit function used by Crude Monitor on distillation profile - interpolation calculator.
 
         Setting temperature as 'x' variable, will get interpolated values for 'Recovery %' over the range.
         '''
-        x = np.array(df['Temperature'])
-        y = np.array(df['Recovery'])
+        x = np.array(df['temperature'])
+        y = np.array(df['recovery'])
+
+        range = self.get_discrete_temperature_range(df)
 
         interpolation_fit = pchip(x,y)
-        return interpolation_fit(range)
+        interpolation = pd.DataFrame({'temperature': range, 'recovery': interpolation_fit(range)})
+        interpolation = interpolation.set_index('temperature')
+        return interpolation
+
+    def merge_interpolations_over_range(self, interp1, interp2, range):
+        '''
+        Merge interpolations from input pair into the specified temperature range
+        '''
+        df = pd.DataFrame({'temperature': range})
+        df = df.set_index('temperature')
+        df = df.join(interp1)
+        df = df.join(interp2, rsuffix='_2')
+        return df
 
     def run(self):
         print("Running Blended Distillation Profile Builder...")
         # self.extract_profiles_from_web()
 
-        profile_df = self.load_processed_profile('AHS')
+        profile1_df = self.load_processed_profile('AHS')
+        profile2_df = self.load_processed_profile('OSH')
+        
+        recovery1 = self.get_recovery_interpolation(profile1_df)
+        recovery2 = self.get_recovery_interpolation(profile2_df)
 
-        interpolation_range = np.arange(math.ceil(profile_df['Temperature'].min()), math.floor(profile_df['Temperature'].max()), 1)
-        interpolation = self.get_interpolation_fit(profile_df, interpolation_range)
-        print(interpolation)
-
-
-
+        pair_range = self.get_global_temperature_range(profile1_df, profile2_df)
+        blended_interpolation = self.merge_interpolations_over_range(recovery1, recovery2, pair_range)
+        print(blended_interpolation)
 
 
 if __name__ == "__main__":
