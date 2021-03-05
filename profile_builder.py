@@ -96,13 +96,30 @@ class BlendedProfileBuilder():
         '''
         df = pd.DataFrame({'temperature': range})
         df = df.set_index('temperature')
-        df = df.join(interp1)
-        df = df.join(interp2, rsuffix='_2')
+        df = df.join(interp1).join(interp2, rsuffix='_2').reset_index()
+        df = df.fillna(method='ffill').fillna(value=0)
         return df
+
+    def compute_blended_profile(self, df, share1, share2, df1, df2):
+
+        profile_percentages = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 99] 
+
+        df['blended'] = share1 * df['recovery'] + share2 * df['recovery_2']
+        blended_interp = pchip(df['blended'], df['temperature'])
+        temperatures = blended_interp(profile_percentages)
+
+        blended_df = pd.DataFrame({'recovery': profile_percentages, 'temperature': temperatures})
+
+        recovery_max = df1['recovery'].max() * share1 + df2['recovery'].max() * share2
+        over_max = blended_df[blended_df['recovery'] > recovery_max]['temperature'].index
+        blended_df.loc[over_max, 'temperature'] = np.nan
+        return blended_df
 
     def run(self):
         print("Running Blended Distillation Profile Builder...")
         # self.extract_profiles_from_web()
+
+        share1, share2 = 0.01, 0.99
 
         profile1_df = self.load_processed_profile('AHS')
         profile2_df = self.load_processed_profile('OSH')
@@ -111,9 +128,9 @@ class BlendedProfileBuilder():
         recovery2 = self.get_recovery_interpolation(profile2_df)
 
         pair_range = self.get_global_temperature_range(profile1_df, profile2_df)
-        blended_interpolation = self.merge_interpolations_over_range(recovery1, recovery2, pair_range)
-        print(blended_interpolation)
-
+        paired_recoveries = self.merge_interpolations_over_range(recovery1, recovery2, pair_range)
+        blended_df = self.compute_blended_profile(paired_recoveries, share1, share2, profile1_df, profile2_df)
+        print(blended_df)
 
 if __name__ == "__main__":
 
