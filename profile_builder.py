@@ -12,13 +12,26 @@ class BlendedProfileBuilder():
     Blended distillation builder class for processing blended oil profiles
     '''
 
-    def __init__(self, code1, code2, volume1, volume2):
+    def __init__(self, code1, code2, volume1, volume2, refresh=False):
+        '''
+        Args:
+            code1 (str): The first oil code parameter.
+            code2 (str): The second oil code paramter.
+            volume1 (float): The volume share of first oil code.
+            volume2 (float): The volume share of second oil code.
+            refresh (bool): Flag to refresh profile data from web.
+        '''
+        if volume1 <= 0 or volume1 >= 1 or volume2 <= 0 or volume2 >= 1:
+            raise ValueError
+
+        self.profile_percentages = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 99]
         self.code1 = code1
         self.code2 = code2
         self.volume1 = volume1
         self.volume2 = volume2
+        self.refresh = refresh
 
-    @classmethod
+    @staticmethod
     def extract_profiles_from_web():
         '''
         Extract distillation profile tables from Crude Monitor website and load into file store
@@ -73,7 +86,7 @@ class BlendedProfileBuilder():
     @staticmethod
     def get_discrete_temperature_range(profile_df):
         '''
-        Compute temperature range based on min/max of profile
+        Generate temperature points based on min/max range of profile
         '''
         return np.arange(math.ceil(profile_df['temperature'].min()),
             math.floor(profile_df['temperature'].max()), 1)
@@ -81,7 +94,7 @@ class BlendedProfileBuilder():
     @staticmethod
     def get_global_temperature_range(df1, df2):
         '''
-        Compute global temperature range based on min/max of profile pair
+        Generate global temperature points based on min/max range of profile pair
         '''
         min_val = min(df1['temperature'].min(), df2['temperature'].min())
         max_val = max(df1['temperature'].max(), df2['temperature'].max())
@@ -120,23 +133,20 @@ class BlendedProfileBuilder():
         merged_df = merged_df.fillna(method='ffill').fillna(value=0)
         return merged_df
 
-    @staticmethod
-    def compute_blended_profile(pair_df, share1, share2, df1, df2):
+    def compute_blended_profile(self, pair_df, share1, share2, df1, df2):
         '''
         Compute blended distillation profile using volume share and reversed interpolation
         '''
 
-        profile_percentages = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 99]
-
         # at each temperature point, compute blended recovery rate
         pair_df['blended'] = share1 * pair_df['recovery'] + share2 * pair_df['recovery_2']
 
-        # using blended recovery rate, perform an interpolatio to now 
+        # using blended recovery rate, perform an interpolatio to now
         # get temperatures at each recovery level
         blended_interp = pchip(pair_df['blended'], pair_df['temperature'])
-        temperatures = blended_interp(profile_percentages)
+        temperatures = blended_interp(self.profile_percentages)
 
-        blended_df = pd.DataFrame({'recovery': profile_percentages, 'temperature': temperatures})
+        blended_df = pd.DataFrame({'recovery': self.profile_percentages, 'temperature': temperatures})
 
         # compute maximum possible overall recovery rate for blended mixture and
         # set any recovery points above this to NaN in final profile
@@ -149,10 +159,11 @@ class BlendedProfileBuilder():
     def run(self):
         '''
         Execute blended distillation profile builder
+        Refresh distillation profiles if specified
         '''
+        if self.refresh:
+            self.extract_profiles_from_web()
 
-        # self.extract_profiles_from_web()
-        
         # load distillation profiles and create recovery interpolations
         profile1_df = self.load_processed_profile(self.code1)
         profile2_df = self.load_processed_profile(self.code2)
@@ -172,12 +183,14 @@ if __name__ == "__main__":
 
     print("\nBlended Distillation Profile Builder...")
 
+    # load valid oil profiles from file store
     valid_profiles_df = pd.read_csv("data/oil-profiles.csv")
     valid_oil_codes = valid_profiles_df['Code'].unique()
 
     print("\nDistillation profile available for following oil codes:")
     print(valid_oil_codes)
 
+    # prompt user for blended oil mixture details
     while True:
         print("\nEnter a first vaild oil code:")
         input_code1 = input().upper()
@@ -187,6 +200,8 @@ if __name__ == "__main__":
         input_volume1 = input()
         print("\nEnter a volume for the second oil code:")
         input_volume2 = input()
+        print("\nDo you want to update distillation profiles from Crude Monitor? (Y/N)")
+        input_update = input().upper()
 
         if input_code1 not in valid_oil_codes or input_code2 not in valid_oil_codes:
             print("\nYou entered at least one invalid oil code or code with no data. Try again.")
@@ -202,11 +217,18 @@ if __name__ == "__main__":
             print("\nYou entered at least one invalid volume. Try again.")
             continue
 
+        if len(input_update) > 0 and input_update[0] in ['Y','N']:
+            input_update = input_update[0] == 'Y'
+        else:
+            print("\nYou entered an invalid entry for updating profiles. Try again.")
+            continue
+
         break
 
-    builder = BlendedProfileBuilder(input_code1, input_code2, input_share1, input_share2)
+    # generate blended distillation profiel using builder
+    builder = BlendedProfileBuilder(input_code1, input_code2, 
+        input_share1, input_share2, input_update)
     blended_profile_df = builder.run()
 
-    print(f"\nBlended distillation profile for \
-        {input_code1} ({input_share1*100:.1f}%) and {input_code2} ({input_share2*100:.1f}%):")
+    print(f"\nBlended distillation profile for {input_code1} ({input_share1*100:.1f}%) and {input_code2} ({input_share2*100:.1f}%):")
     print(blended_profile_df)
