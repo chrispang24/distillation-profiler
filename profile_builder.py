@@ -141,7 +141,7 @@ class BlendedProfileBuilder():
         # at each temperature point, compute blended recovery rate
         pair_df['blended'] = share1 * pair_df['recovery'] + share2 * pair_df['recovery_2']
 
-        # using blended recovery rate, perform an interpolatio to now
+        # using blended recovery rate, perform an interpolation to now
         # get temperatures at each recovery level
         blended_interp = pchip(pair_df['blended'], pair_df['temperature'])
         temperatures = blended_interp(self.profile_percentages)
@@ -192,13 +192,13 @@ if __name__ == "__main__":
 
     # prompt user for blended oil mixture details
     while True:
-        print("\nEnter a first vaild oil code:")
+        print("\nEnter first valid oil code:")
         input_code1 = input().upper()
-        print("\nEnter a second vaild oil code:")
+        print("\nEnter second valid oil code:")
         input_code2 = input().upper()
-        print("\nEnter a volume for the first oil code:")
+        print("\nEnter volume for the first oil code:")
         input_volume1 = input()
-        print("\nEnter a volume for the second oil code:")
+        print("\nEnter volume for the second oil code:")
         input_volume2 = input()
         print("\nDo you want to update distillation profiles from Crude Monitor? (Y/N)")
         input_update = input().upper()
