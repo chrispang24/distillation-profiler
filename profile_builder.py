@@ -5,8 +5,11 @@ from scipy.interpolate import pchip
 
 class BlendedProfileBuilder():
 
-    def __init__(self):
-        pass
+    def __init__(self, code1, code2, volume1, volume2):
+        self.code1 = code1
+        self.code2 = code2
+        self.volume1 = volume1
+        self.volume2 = volume2
 
     def extract_profiles_from_web(self):
         '''
@@ -115,24 +118,62 @@ class BlendedProfileBuilder():
         blended_df.loc[over_max, 'temperature'] = np.nan
         return blended_df
 
-    def run(self):
-        print("Running Blended Distillation Profile Builder...")
+    def compute_profile(self):
+
         # self.extract_profiles_from_web()
 
-        share1, share2 = 0.01, 0.99
-
-        profile1_df = self.load_processed_profile('AHS')
-        profile2_df = self.load_processed_profile('OSH')
+        profile1_df = self.load_processed_profile(self.code1)
+        profile2_df = self.load_processed_profile(self.code2)
         
         recovery1 = self.get_recovery_interpolation(profile1_df)
         recovery2 = self.get_recovery_interpolation(profile2_df)
 
         pair_range = self.get_global_temperature_range(profile1_df, profile2_df)
-        paired_recoveries = self.merge_interpolations_over_range(recovery1, recovery2, pair_range)
-        blended_df = self.compute_blended_profile(paired_recoveries, share1, share2, profile1_df, profile2_df)
-        print(blended_df)
+        paired_recovery = self.merge_interpolations_over_range(recovery1, recovery2, pair_range)
+        blended_df = self.compute_blended_profile(paired_recovery, 
+            self.volume1, self.volume2, profile1_df, profile2_df)
+
+        return blended_df
 
 if __name__ == "__main__":
 
-    builder = BlendedProfileBuilder()
-    builder.run()
+    print("\nBlended Distillation Profile Builder...")
+
+    profiles_df = pd.read_csv("data/oil-profiles.csv")
+    valid_oil_codes = profiles_df['Code'].unique()
+
+    print("\nDistillation profile available for following oil codes:")
+    print(valid_oil_codes)
+
+    while True:
+        print("\nEnter a first vaild oil code:")
+        code1 = input().upper()
+
+        print("\nEnter a second vaild oil code:")
+        code2 = input().upper()
+
+        print("\nEnter a volume for the first oil code:")
+        volume1 = input()        
+
+        print("\nEnter a volume for the second oil code:")
+        volume2 = input()        
+
+        if code1 not in valid_oil_codes or code2 not in valid_oil_codes:
+            print("\nYou entered at least one invalid oil code or code with no data. Try again.")
+            continue
+
+        try:
+            volume1 = float(volume1)
+            volume2 = float(volume2)
+            total_volume = volume1 + volume2
+            share1 = volume1 / total_volume
+            share2 = volume2 / total_volume            
+        except:
+            print("\nYou entered at least one invalid volume. Try again.")
+            continue
+
+        builder = BlendedProfileBuilder(code1, code2, share1, share2)
+        blended_profile_df = builder.compute_profile()
+
+        print(f"\nBlended distillation profile for {code1} ({share1*100:.1f}%) and {code2} ({share2*100:.1f}%):")
+        print(blended_profile_df)
