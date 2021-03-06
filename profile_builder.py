@@ -9,7 +9,7 @@ from scipy.interpolate import pchip
 
 class BlendedProfileBuilder():
     '''
-    Distillation profile builder for blended oil profiles
+    Blended distillation builder class for processing blended oil profiles
     '''
 
     def __init__(self, code1, code2, volume1, volume2):
@@ -18,7 +18,7 @@ class BlendedProfileBuilder():
         self.volume1 = volume1
         self.volume2 = volume2
 
-    @staticmethod
+    @classmethod
     def extract_profiles_from_web():
         '''
         Extract distillation profile tables from Crude Monitor website and load into file store
@@ -128,15 +128,22 @@ class BlendedProfileBuilder():
 
         profile_percentages = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 99]
 
+        # at each temperature point, compute blended recovery rate
         pair_df['blended'] = share1 * pair_df['recovery'] + share2 * pair_df['recovery_2']
+
+        # using blended recovery rate, perform an interpolatio to now 
+        # get temperatures at each recovery level
         blended_interp = pchip(pair_df['blended'], pair_df['temperature'])
         temperatures = blended_interp(profile_percentages)
 
         blended_df = pd.DataFrame({'recovery': profile_percentages, 'temperature': temperatures})
 
+        # compute maximum possible overall recovery rate for blended mixture and
+        # set any recovery points above this to NaN in final profile
         recovery_max = df1['recovery'].max() * share1 + df2['recovery'].max() * share2
         over_max = blended_df[blended_df['recovery'] > recovery_max]['temperature'].index
         blended_df.loc[over_max, 'temperature'] = np.nan
+
         return blended_df
 
     def run(self):
@@ -145,13 +152,15 @@ class BlendedProfileBuilder():
         '''
 
         # self.extract_profiles_from_web()
-
+        
+        # load distillation profiles and create recovery interpolations
         profile1_df = self.load_processed_profile(self.code1)
         profile2_df = self.load_processed_profile(self.code2)
-
         recovery1 = self.get_recovery_interpolation(profile1_df)
         recovery2 = self.get_recovery_interpolation(profile2_df)
 
+        # using global temperature range for profile pair, merge interpolations and then
+        # generate final blended distillation profile
         global_range = self.get_global_temperature_range(profile1_df, profile2_df)
         paired_recovery = self.merge_interpolations_over_range(recovery1, recovery2, global_range)
         blended_df = self.compute_blended_profile(paired_recovery,
