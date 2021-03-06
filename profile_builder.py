@@ -154,6 +154,11 @@ class BlendedProfileBuilder():
         over_max = blended_df[blended_df['recovery'] > recovery_max]['temperature'].index
         blended_df.loc[over_max, 'temperature'] = np.nan
 
+        # set any outlier negative values to NaN
+        negative_val = blended_df[blended_df['temperature']
+                                  < 0]['temperature'].index
+        blended_df.loc[negative_val, 'temperature'] = np.nan
+
         return blended_df
 
     def run(self):
