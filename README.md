@@ -1,6 +1,4 @@
-# Validere - Take-Home Assignment
-
-by Christopher Pang (hello@christopherpang.ca)
+# Blended Distallation Profiler
 
 ## Overview
 
@@ -10,9 +8,7 @@ A distillation profile is a discrete snapshot of temperatures at which X% of the
 
 ## Model Approach
 
-At first glance, it seemed that I could maybe take a simple multiplication of the % share of each oil and its respective temperature point for each mass recovery % to get a blended result. But this likely would not provide a good approximation, especially for oil blends with very different distillation profile curves.
-
-The final approach taken was to interpolate data values for each distillation profile, allowing us to then, for every temperature point, compute the blended mass recovery %. We can then use these aggregations to build out the blended mixture's final distillation profile.
+The approach taken was to interpolate data values for each distillation profile, allowing us to then, for every temperature point, compute the blended mass recovery %. We can then use these aggregations to build out the blended mixture's final distillation profile.
 
 ![Model Builder Diagram](diagram.png)
 
