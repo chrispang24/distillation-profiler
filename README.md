@@ -1,4 +1,4 @@
-# Blended Distallation Profiler
+# Blended Distillation Profiler
 
 ## Overview
 
